@@ -34,3 +34,8 @@
      (if (.exists (File. solution-file))
        (assert (= (slurp solution-file) (str solution)))
        (spit solution-file solution)))))
+
+(defn fix-point [f x]
+  "Calculates the fix point of f with respect to x."
+  (reduce #(if (= %1 %2) (reduced %1) %2)
+          (iterate f x)))
