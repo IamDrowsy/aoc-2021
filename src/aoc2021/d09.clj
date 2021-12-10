@@ -8,7 +8,9 @@
   {:point/key {:db/unique :db.unique/identity}
    :point/value {}
    :point/next {:db/cardinality :db.cardinality/many
-                :db/valueType :db.type/ref}})
+                :db/valueType :db.type/ref}
+   :point/up {:db/cardinality :db.cardinality/many
+              :db/valueType :db.type/ref}})
 
 (defn mapcat-indexed [f coll]
   (mapcat f (range) coll))
@@ -39,7 +41,26 @@
                         [?center :point/value ?center-value]
                         [?center :point/next ?next]
                         [?next :point/value ?next-value]
-                        [(>= ?center-value ?next-value)])]])
+                        [(>= ?center-value ?next-value)])]
+             [(basin-rec ?center ?upper)
+              [?center :point/next ?upper]
+              [?upper :point/value ?uvalue]
+              [(not= ?uvalue 9)]
+              [?center :point/value ?cvalue]
+              [(< ?cvalue ?uvalue)]]
+             [(basin-rec ?center ?upper)
+              [?center :point/next ?between]
+              [?between :point/value ?bvalue]
+              [(not= ?bvalue 9)]
+              [?center :point/value ?cvalue]
+              [(< ?cvalue ?bvalue)]
+              (basin-rec ?between ?upper)]
+             [(basin-up ?center ?upper)
+              [?center :point/up ?upper]]
+             [(basin-up ?center ?upper)
+              [?center :point/up ?between]
+              (basin-up ?between ?upper)]])
+
 
 (defn sum-low-points [con]
   (d/q '[:find (sum ?risk) .
@@ -65,7 +86,14 @@
              current-basin))
 
 (defn basin-points [con low-point]
-  (fix-point (partial basin-points* con) #{low-point}))
+  (count (fix-point (partial basin-points* con) #{low-point})))
+
+(defn basin-points-rec [con low-point]
+  (inc (d/q '[:find (count ?e) .
+              :in $ % ?c
+              :where
+              (basin-rec ?c ?e)]
+            @con rules low-point)))
 
 (defn low-points [con]
   (d/q '[:find [?low-point ...]
@@ -75,16 +103,72 @@
          (low-point ?low-point)]
        @con rules))
 
+(defn add-upper-information! [con]
+  (d/transact! con (mapv (fn [[e u]]
+                           [:db/add e :point/up u])
+                         (d/q '[:find ?e ?u
+                                :where
+                                [?e :point/next ?u]
+                                [?e :point/value ?eval]
+                                [?u :point/value ?uval]
+                                [(< ?eval ?uval)]
+                                [(not= ?uval 9)]]
+                              @con))))
+
+(defn basin-points-up [con low-point]
+  (inc (d/q '[:find (count ?e) .
+              :in $ % ?c
+              :where
+              (basin-up ?c ?e)]
+            @con rules low-point)))
+
+(defn basin-points-up-all [con]
+  (->> (d/q '[:find ?c (count ?e)
+              :in $ %
+              :where
+              [?c :point/value _]
+              (low-point ?c)
+              (basin-up ?c ?e)]
+            @con rules)
+       (map second)
+       (sort)
+       (reverse)
+       (take 3)
+       (map inc)))
+
 (defn solve-2 [input]
   (let [con (init input)]
     (->> (low-points con)
          (map (partial basin-points con))
-         (map count)
          (sort)
          (reverse)
          (take 3)
          (apply *))))
 
+(defn solve-2-recursive [input]
+  (let [con (init input)]
+    (->> (low-points con)
+         (map (partial basin-points-rec con))
+         (sort)
+         (reverse)
+         (take 3)
+         (apply *))))
+
+(defn solve-2-up [input]
+  (let [con (init input)]
+    (add-upper-information! con)
+    (->> (low-points con)
+         (map (partial basin-points-up con))
+         (sort)
+         (reverse)
+         (take 3)
+         (apply *))))
+
+(defn solve-2-up-all [input]
+  (let [con (init input)]
+    (add-upper-information! con)
+    (apply * (basin-points-up-all con))))
+
 (defn run []
   (check 1 (solve-1 (get-input)))
-  (check 2 (solve-2 (get-input))))
+  (check 2 (solve-2-up-all (get-input))))
