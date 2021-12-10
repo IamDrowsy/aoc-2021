@@ -39,3 +39,11 @@
   "Calculates the fix point of f with respect to x."
   (reduce #(if (= %1 %2) (reduced %1) %2)
           (iterate f x)))
+
+(defn median [col]
+  (let [sorted (sort col)
+        len (count col)
+        mid (/ len 2)]
+    (if (zero? (mod len 2))
+      (* 0.5 (+ (nth sorted (Math/floor mid)) (nth sorted (Math/ceil mid))))
+      (nth sorted mid))))
