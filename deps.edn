@@ -5,6 +5,7 @@
         meander/epsilon {:mvn/version "0.0.650"}
         org.flatland/useful {:mvn/version "0.11.6"}
         clj-http/clj-http {:mvn/version "3.12.3"}
+        aysylu/loom {:mvn/version "1.0.2"}
         datascript {:mvn/version "1.3.2"}}
  :aliases
  {:run-m {:main-opts ["-m" "aoc2021.main"]}
